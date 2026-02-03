@@ -23,141 +23,127 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * REST Controller cho Shipping API
+ * REST Controller for Shipping API
  * Base URL: /api/shipping
- * 
+ *
  * Endpoints:
- * - GET  /provinces              : Lấy danh sách Tỉnh/Thành
- * - GET  /districts/{provinceId} : Lấy danh sách Quận/Huyện theo Tỉnh
- * - GET  /wards/{districtId}     : Lấy danh sách Phường/Xã theo Huyện
- * - POST /calculate              : Tính phí vận chuyển
+ * - GET  /provinces              : Get list of Provinces/Cities
+ * - GET  /districts/{provinceId} : Get list of Districts by Province
+ * - GET  /wards/{districtId}     : Get list of Wards by District
+ * - POST /calculate              : Calculate shipping fee
  */
 @RestController
 @RequestMapping("/api/shipping")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*") // Cho phép React gọi từ localhost:3000
+@CrossOrigin(origins = "*") // Allow React calls from localhost:3000
 public class ShippingController {
 
     private final GhtkService ghtkService;
 
-    // ==================== LẤY DANH SÁCH ĐỊA CHỈ ====================
-
     /**
      * GET /api/shipping/provinces
-     * Lấy danh sách 63 Tỉnh/Thành phố để đổ vào dropdown
-     * 
-     * React gọi lúc mới vào trang (Initial Load)
+     * Get list of 63 Provinces/Cities for dropdown
+     *
+     * Called by React on initial page load
      */
     @GetMapping("/provinces")
     public ResponseEntity<ApiResponse<List<ProvinceDTO>>> getProvinces() {
-        log.info("API được gọi: GET /api/shipping/provinces");
-        
+        log.info("API called: GET /api/shipping/provinces");
+
         List<ProvinceDTO> provinces = ghtkService.getProvinces();
-        
-        return ResponseEntity.ok(ApiResponse.success(provinces, 
-                "Lấy danh sách " + provinces.size() + " tỉnh/thành phố thành công"));
+
+        return ResponseEntity.ok(ApiResponse.success(provinces,
+                "Successfully retrieved " + provinces.size() + " provinces/cities"));
     }
 
     /**
      * GET /api/shipping/districts/{provinceId}
-     * Lấy danh sách Quận/Huyện theo Tỉnh
-     * 
-     * React gọi khi user chọn Tỉnh từ dropdown
+     * Get list of Districts by Province
+     *
+     * Called by React when user selects a Province from dropdown
      */
     @GetMapping("/districts/{provinceId}")
     public ResponseEntity<ApiResponse<List<DistrictDTO>>> getDistricts(
             @PathVariable Integer provinceId) {
-        log.info("API được gọi: GET /api/shipping/districts/{}", provinceId);
-        
+        log.info("API called: GET /api/shipping/districts/{}", provinceId);
+
         List<DistrictDTO> districts = ghtkService.getDistricts(provinceId);
-        
+
         return ResponseEntity.ok(ApiResponse.success(districts,
-                "Lấy danh sách " + districts.size() + " quận/huyện thành công"));
+                "Successfully retrieved " + districts.size() + " districts"));
     }
 
     /**
      * GET /api/shipping/wards/{districtId}
-     * Lấy danh sách Phường/Xã theo Quận/Huyện
-     * 
-     * React gọi khi user chọn Quận/Huyện từ dropdown
+     * Get list of Wards by District
+     *
+     * Called by React when user selects a District from dropdown
      */
     @GetMapping("/wards/{districtId}")
     public ResponseEntity<ApiResponse<List<WardDTO>>> getWards(
             @PathVariable Integer districtId) {
-        log.info("API được gọi: GET /api/shipping/wards/{}", districtId);
-        
-        List<WardDTO> wards = ghtkService.getWards(districtId);
-        
-        return ResponseEntity.ok(ApiResponse.success(wards,
-                "Lấy danh sách " + wards.size() + " phường/xã thành công"));
-    }
+        log.info("API called: GET /api/shipping/wards/{}", districtId);
 
-    // ==================== TÍNH PHÍ VẬN CHUYỂN ====================
+        List<WardDTO> wards = ghtkService.getWards(districtId);
+
+        return ResponseEntity.ok(ApiResponse.success(wards,
+                "Successfully retrieved " + wards.size() + " wards"));
+    }
 
     /**
      * POST /api/shipping/calculate
-     * Tính phí vận chuyển dựa trên địa chỉ gửi, nhận và cân nặng
-     * 
-     * React gọi khi user bấm nút "Tính phí"
-     * 
+     * Calculate shipping fee based on delivery address and weight via GHN API
+     *
+     * Called by React when user clicks "Calculate" button
+     *
      * Request Body (ShippingRequest):
      * {
-     *   "pickProvince": "Hà Nội",
-     *   "pickDistrict": "Quận Cầu Giấy",
-     *   "province": "Hồ Chí Minh",
-     *   "district": "Quận 1",
-     *   "weight": 2000,
-     *   "value": 500000
+     *   "toDistrictId": 1442,
+     *   "toWardCode": "20314",
+     *   "weight": 1000,
+     *   "serviceTypeId": 2,
+     *   "insuranceValue": 500000
      * }
      */
     @PostMapping("/calculate")
     public ResponseEntity<ApiResponse<ShippingResponse>> calculateFee(
             @RequestBody ShippingRequest request) {
-        log.info("API được gọi: POST /api/shipping/calculate");
-        log.info("Request: {} -> {}, {}g", 
-                request.getPickProvince(), request.getProvince(), request.getWeight());
-        
-        // Validate input cơ bản
-        if (request.getPickProvince() == null || request.getPickProvince().isEmpty()) {
+        log.info("API called: POST /api/shipping/calculate");
+        log.info("Request: from_district={} -> to_district={}, to_ward={}, {}g",
+                request.getFromDistrictId(), request.getToDistrictId(),
+                request.getToWardCode(), request.getWeight());
+
+        // Validate required fields
+        if (request.getToDistrictId() == null) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Vui lòng chọn Tỉnh/Thành gửi hàng"));
+                    .body(ApiResponse.error("Please select delivery District"));
         }
-        if (request.getPickDistrict() == null || request.getPickDistrict().isEmpty()) {
+        if (request.getToWardCode() == null || request.getToWardCode().isEmpty()) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Vui lòng chọn Quận/Huyện gửi hàng"));
-        }
-        if (request.getProvince() == null || request.getProvince().isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Vui lòng chọn Tỉnh/Thành nhận hàng"));
-        }
-        if (request.getDistrict() == null || request.getDistrict().isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Vui lòng chọn Quận/Huyện nhận hàng"));
+                    .body(ApiResponse.error("Please select delivery Ward"));
         }
         if (request.getWeight() == null || request.getWeight() <= 0) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Vui lòng nhập cân nặng hợp lệ (gram)"));
+                    .body(ApiResponse.error("Please enter a valid weight (gram)"));
         }
-        
+
         ShippingResponse result = ghtkService.calculateFee(request);
-        
+
         if (result.isSuccess()) {
-            return ResponseEntity.ok(ApiResponse.success(result, "Tính phí thành công"));
+            return ResponseEntity.ok(ApiResponse.success(result, "Fee calculation successful"));
         } else {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(result.getMessage()));
         }
     }
 
-    // ==================== HEALTH CHECK ====================
-
     /**
      * GET /api/shipping/health
-     * Kiểm tra API có hoạt động không
+     * Check if API is running
      */
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<String>> healthCheck() {
-        return ResponseEntity.ok(ApiResponse.success("OK", "API đang hoạt động bình thường"));
+        return ResponseEntity.ok(ApiResponse.success("OK", "API is running normally"));
     }
 }

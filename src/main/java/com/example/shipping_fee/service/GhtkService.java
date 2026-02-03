@@ -6,25 +6,25 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.*;
 
 /**
- * Service xử lý logic nghiệp vụ với GHTK API
- * - Lấy danh sách địa chỉ (Tỉnh, Huyện, Xã)
- * - Tính phí vận chuyển
+ * Service for GHN API business logic
+ * - Get address lists (Province, District, Ward)
+ * - Calculate shipping fee
  */
 @Service
 @Slf4j
 public class GhtkService {
 
-    // GHTK API Token - cấu hình trong application.yaml
     @Value("${ghtk.api.token:}")
     private String ghtkToken;
 
-    // GHTK API Base URL
-    @Value("${ghtk.api.base-url:https://services.giaohangtietkiem.vn}")
+    @Value("${ghtk.api.shop-id:0}")
+    private Integer shopId;
+
+    @Value("${ghtk.api.base-url:https://dev-online-gateway.ghn.vn}")
     private String ghtkBaseUrl;
 
     private final RestTemplate restTemplate;
@@ -34,27 +34,26 @@ public class GhtkService {
     }
 
     /**
-     * Tạo HttpHeaders với Token GHTK
+     * Create HttpHeaders with Token and ShopId for GHN API
      */
     private HttpHeaders createHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Token", ghtkToken);
+        headers.set("ShopId", String.valueOf(shopId));
         return headers;
     }
 
-    // ==================== LẤY DANH SÁCH ĐỊA CHỈ ====================
-
     /**
-     * Lấy danh sách Tỉnh/Thành phố từ GHTK
+     * Get list of Provinces/Cities from GHN
      * API: GET /services/shipment/list_pick_add
-     * 
-     * Nếu không có token hoặc API lỗi -> trả về Mock Data
+     *
+     * If token is missing or API fails -> return Mock Data
      */
     public List<ProvinceDTO> getProvinces() {
         try {
             if (ghtkToken == null || ghtkToken.isEmpty()) {
-                log.warn("GHTK Token chưa được cấu hình, sử dụng Mock Data");
+                log.warn("GHN Token not configured, using Mock Data");
                 return getMockProvinces();
             }
 
@@ -72,23 +71,23 @@ public class GhtkService {
                     
                     for (Map<String, Object> item : data) {
                         ProvinceDTO dto = new ProvinceDTO();
-                        dto.setId((Integer) item.get("id"));
-                        dto.setName((String) item.get("name"));
-                        dto.setCode((String) item.get("code"));
+                        dto.setProvinceId((Integer) item.get("ProvinceID"));
+                        dto.setProvinceName((String) item.get("ProvinceName"));
+                        dto.setCode((String) item.get("Code"));
                         provinces.add(dto);
                     }
                     return provinces;
                 }
             }
         } catch (Exception e) {
-            log.error("Lỗi khi gọi GHTK API lấy danh sách tỉnh: {}", e.getMessage());
+            log.error("Error calling GHN API to get province list: {}", e.getMessage());
         }
-        
+
         return getMockProvinces();
     }
 
     /**
-     * Lấy danh sách Quận/Huyện theo Tỉnh
+     * Get list of Districts by Province
      */
     public List<DistrictDTO> getDistricts(Integer provinceId) {
         try {
@@ -119,14 +118,14 @@ public class GhtkService {
                 }
             }
         } catch (Exception e) {
-            log.error("Lỗi khi gọi GHTK API lấy danh sách huyện: {}", e.getMessage());
+            log.error("Error calling GHN API to get district list: {}", e.getMessage());
         }
-        
+
         return getMockDistricts(provinceId);
     }
 
     /**
-     * Lấy danh sách Phường/Xã theo Quận/Huyện
+     * Get list of Wards by District
      */
     public List<WardDTO> getWards(Integer districtId) {
         try {
@@ -157,66 +156,91 @@ public class GhtkService {
                 }
             }
         } catch (Exception e) {
-            log.error("Lỗi khi gọi GHTK API lấy danh sách xã: {}", e.getMessage());
+            log.error("Error calling GHN API to get ward list: {}", e.getMessage());
         }
-        
+
         return getMockWards(districtId);
     }
 
-    // ==================== TÍNH PHÍ VẬN CHUYỂN ====================
-
     /**
-     * Tính phí vận chuyển qua GHTK API
-     * API: GET /services/shipment/fee
+     * Calculate shipping fee via GHN API
+     * API: POST /shiip/public-api/v2/shipping-order/fee
      */
     public ShippingResponse calculateFee(ShippingRequest request) {
         try {
             if (ghtkToken == null || ghtkToken.isEmpty()) {
-                log.warn("GHTK Token chưa được cấu hình, sử dụng Mock Calculate");
+                log.warn("GHN Token not configured, using Mock Calculate");
                 return calculateMockFee(request);
             }
 
-            String url = UriComponentsBuilder.fromHttpUrl(ghtkBaseUrl + "/services/shipment/fee")
-                    .queryParam("pick_province", request.getPickProvince())
-                    .queryParam("pick_district", request.getPickDistrict())
-                    .queryParamIfPresent("pick_ward", Optional.ofNullable(request.getPickWard()))
-                    .queryParamIfPresent("pick_address", Optional.ofNullable(request.getPickAddress()))
-                    .queryParam("province", request.getProvince())
-                    .queryParam("district", request.getDistrict())
-                    .queryParamIfPresent("ward", Optional.ofNullable(request.getWard()))
-                    .queryParamIfPresent("address", Optional.ofNullable(request.getAddress()))
-                    .queryParam("weight", request.getWeight())
-                    .queryParamIfPresent("value", Optional.ofNullable(request.getValue()))
-                    .queryParamIfPresent("transport", Optional.ofNullable(request.getTransport()))
-                    .queryParamIfPresent("deliver_option", Optional.ofNullable(request.getDeliverOption()))
-                    .build()
-                    .toUriString();
+            String url = ghtkBaseUrl + "/shiip/public-api/v2/shipping-order/fee";
 
-            log.info("Gọi GHTK API: {}", url);
-            
-            HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+            // Build request body
+            Map<String, Object> requestBody = new HashMap<>();
+            if (request.getServiceId() != null) {
+                requestBody.put("service_id", request.getServiceId());
+            }
+            if (request.getServiceTypeId() != null) {
+                requestBody.put("service_type_id", request.getServiceTypeId());
+            }
+            requestBody.put("to_district_id", request.getToDistrictId());
+            requestBody.put("to_ward_code", request.getToWardCode());
+            requestBody.put("weight", request.getWeight());
+
+            // Optional fields
+            if (request.getFromDistrictId() != null) {
+                requestBody.put("from_district_id", request.getFromDistrictId());
+            }
+            if (request.getFromWardCode() != null) {
+                requestBody.put("from_ward_code", request.getFromWardCode());
+            }
+            if (request.getLength() != null) {
+                requestBody.put("length", request.getLength());
+            }
+            if (request.getWidth() != null) {
+                requestBody.put("width", request.getWidth());
+            }
+            if (request.getHeight() != null) {
+                requestBody.put("height", request.getHeight());
+            }
+            if (request.getInsuranceValue() != null) {
+                requestBody.put("insurance_value", request.getInsuranceValue());
+            }
+            if (request.getCodValue() != null) {
+                requestBody.put("cod_value", request.getCodValue());
+            }
+            if (request.getCoupon() != null) {
+                requestBody.put("coupon", request.getCoupon());
+            }
+
+            log.info("Calling GHN API: POST {} with body: {}", url, requestBody);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, createHeaders());
             ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, Map.class);
+                    url, HttpMethod.POST, entity, Map.class);
 
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+            if (response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                
-                if (Boolean.TRUE.equals(body.get("success"))) {
-                    Map<String, Object> fee = (Map<String, Object>) body.get("fee");
-                    
-                    Integer shippingFee = parseInteger(fee.get("fee"));
-                    Integer insuranceFee = parseInteger(fee.get("insurance_fee"));
-                    
+                Integer code = parseInteger(body.get("code"));
+
+                if (code != null && code == 200) {
+                    Map<String, Object> data = (Map<String, Object>) body.get("data");
+
                     return ShippingResponse.builder()
                             .success(true)
-                            .message("Tính phí thành công")
-                            .fee(shippingFee)
-                            .insuranceFee(insuranceFee)
-                            .totalFee(shippingFee + insuranceFee)
-                            .deliveryTime((String) fee.get("delivery_time"))
-                            .expectedDelivery((String) fee.get("expected_delivery"))
-                            .extFee(Boolean.TRUE.equals(fee.get("extFee")))
-                            .shipMoneyLead((String) fee.get("ship_fee_only"))
+                            .message("Fee calculation successful")
+                            .total(parseInteger(data.get("total")))
+                            .serviceFee(parseInteger(data.get("service_fee")))
+                            .insuranceFee(parseInteger(data.get("insurance_fee")))
+                            .pickStationFee(parseInteger(data.get("pick_station_fee")))
+                            .couponValue(parseInteger(data.get("coupon_value")))
+                            .r2sFee(parseInteger(data.get("r2s_fee")))
+                            .documentReturn(parseInteger(data.get("document_return")))
+                            .doubleCheck(parseInteger(data.get("double_check")))
+                            .codFee(parseInteger(data.get("cod_fee")))
+                            .pickRemoteAreasFee(parseInteger(data.get("pick_remote_areas_fee")))
+                            .deliverRemoteAreasFee(parseInteger(data.get("deliver_remote_areas_fee")))
+                            .codFailedFee(parseInteger(data.get("cod_failed_fee")))
                             .build();
                 } else {
                     return ShippingResponse.builder()
@@ -226,16 +250,14 @@ public class GhtkService {
                 }
             }
         } catch (Exception e) {
-            log.error("Lỗi khi gọi GHTK API tính phí: {}", e.getMessage());
+            log.error("Error calling GHN API to calculate fee: {}", e.getMessage());
         }
-        
+
         return calculateMockFee(request);
     }
 
-    // ==================== MOCK DATA (Khi không có Token) ====================
-
     /**
-     * Mock danh sách 63 Tỉnh/Thành phố Việt Nam
+     * Mock list of 63 Vietnam Provinces/Cities
      */
     private List<ProvinceDTO> getMockProvinces() {
         return Arrays.asList(
@@ -306,11 +328,11 @@ public class GhtkService {
     }
 
     /**
-     * Mock danh sách Quận/Huyện (sample)
+     * Mock list of Districts (sample)
      */
     private List<DistrictDTO> getMockDistricts(Integer provinceId) {
-        // Mock một số quận/huyện mẫu cho Hà Nội và HCM
-        if (provinceId == 1) { // Hà Nội
+        // Mock some sample districts for Hanoi and HCMC
+        if (provinceId == 1) { // Hanoi
             return Arrays.asList(
                     new DistrictDTO(1, "Quận Ba Đình", 1),
                     new DistrictDTO(2, "Quận Hoàn Kiếm", 1),
@@ -323,7 +345,7 @@ public class GhtkService {
                     new DistrictDTO(9, "Quận Thanh Xuân", 1),
                     new DistrictDTO(10, "Huyện Sóc Sơn", 1)
             );
-        } else if (provinceId == 2) { // HCM
+        } else if (provinceId == 2) { // HCMC
             return Arrays.asList(
                     new DistrictDTO(11, "Quận 1", 2),
                     new DistrictDTO(12, "Quận 3", 2),
@@ -337,8 +359,8 @@ public class GhtkService {
                     new DistrictDTO(20, "Thành phố Thủ Đức", 2)
             );
         }
-        
-        // Trả về mock chung cho các tỉnh khác
+
+        // Return generic mock for other provinces
         return Arrays.asList(
                 new DistrictDTO(100 + provinceId, "Thành phố/Thị xã " + provinceId, provinceId),
                 new DistrictDTO(200 + provinceId, "Huyện A", provinceId),
@@ -347,7 +369,7 @@ public class GhtkService {
     }
 
     /**
-     * Mock danh sách Phường/Xã (sample)
+     * Mock list of Wards (sample)
      */
     private List<WardDTO> getMockWards(Integer districtId) {
         return Arrays.asList(
@@ -360,41 +382,54 @@ public class GhtkService {
     }
 
     /**
-     * Mock tính phí vận chuyển khi không có Token
+     * Mock shipping fee calculation when Token is not configured
      */
     private ShippingResponse calculateMockFee(ShippingRequest request) {
-        // Tính phí mock dựa trên cân nặng và khoảng cách
-        int baseFee = 15000; // Phí cơ bản
-        int weightFee = (request.getWeight() / 500) * 5000; // Thêm 5k mỗi 500g
-        
-        // Nếu khác tỉnh, thêm phí
-        boolean sameProv = request.getPickProvince() != null 
-                && request.getPickProvince().equals(request.getProvince());
-        int distanceFee = sameProv ? 0 : 20000;
-        
-        int totalShippingFee = baseFee + weightFee + distanceFee;
-        
-        // Phí bảo hiểm = 0.5% giá trị đơn hàng
+        // Calculate mock fee based on weight
+        int baseFee = 15000;
+        int weightFee = (request.getWeight() / 500) * 5000;
+
+        // Calculate distance based on district ID
+        boolean sameDistrict = request.getFromDistrictId() != null
+                && request.getFromDistrictId().equals(request.getToDistrictId());
+        int distanceFee = sameDistrict ? 0 : 20000;
+
+        int serviceFee = baseFee + weightFee + distanceFee;
+
+        // Insurance fee = 0.5% of goods value
         int insuranceFee = 0;
-        if (request.getValue() != null && request.getValue() > 0) {
-            insuranceFee = (int) (request.getValue() * 0.005);
+        if (request.getInsuranceValue() != null && request.getInsuranceValue() > 0) {
+            insuranceFee = (int) (request.getInsuranceValue() * 0.005);
         }
-        
+
+        // COD fee = 1% of COD value
+        int codFee = 0;
+        if (request.getCodValue() != null && request.getCodValue() > 0) {
+            codFee = (int) (request.getCodValue() * 0.01);
+        }
+
+        int total = serviceFee + insuranceFee + codFee;
+
         return ShippingResponse.builder()
                 .success(true)
-                .message("Tính phí thành công (Mock Data)")
-                .fee(totalShippingFee)
+                .message("Fee calculation successful (Mock Data)")
+                .total(total)
+                .serviceFee(serviceFee)
                 .insuranceFee(insuranceFee)
-                .totalFee(totalShippingFee + insuranceFee)
-                .deliveryTime(sameProv ? "1-2 ngày" : "3-5 ngày")
-                .expectedDelivery("05/02/2026")
-                .extFee(false)
-                .shipMoneyLead("Trong ngày")
+                .pickStationFee(0)
+                .couponValue(0)
+                .r2sFee(0)
+                .documentReturn(0)
+                .doubleCheck(0)
+                .codFee(codFee)
+                .pickRemoteAreasFee(0)
+                .deliverRemoteAreasFee(0)
+                .codFailedFee(0)
                 .build();
     }
 
     /**
-     * Helper: Parse Integer từ Object
+     * Helper: Parse Integer from Object
      */
     private Integer parseInteger(Object value) {
         if (value == null) return 0;
