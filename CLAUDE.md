@@ -30,6 +30,42 @@ Spring Boot 4.0.2 REST API (Java 17, Maven) for calculating shipping fees in Vie
 - Vietnamese comments and mock data (63 provinces, sample districts/wards)
 - No linter or formatter configured
 
+## Error Handling
+
+**1. Use `ApiResponse<T>` wrapper for all REST responses:**
+- Success responses: `ApiResponse.success(data)`
+- Error responses: `ApiResponse.error(errorCode, message)`
+- Always return appropriate HTTP status codes
+
+**2. Define error codes as constants:**
+- Use a dedicated constants class or enum for error codes
+- Error codes should be descriptive (e.g., `INVALID_ADDRESS`, `API_TIMEOUT`, `MISSING_REQUIRED_FIELD`)
+- Keep error messages user-friendly and translatable
+
+**3. Service layer exception handling:**
+- Catch external API exceptions and log them with `@Slf4j`
+- Provide fallback behavior when appropriate (e.g., mock data when GHN API fails)
+- Wrap low-level exceptions in domain-specific exceptions
+- Example:
+```java
+  try {
+      return callGhnApi(request);
+  } catch (RestClientException e) {
+      log.error("GHN API call failed: {}", e.getMessage());
+      return getFallbackResponse();
+  }
+```
+
+**4. Controller layer exception handling:**
+- Use `@ExceptionHandler` or `@ControllerAdvice` for global exception handling
+- Never expose stack traces or internal details to clients
+- Log exceptions at appropriate levels (ERROR for unexpected, WARN for expected failures)
+
+**5. Validation errors:**
+- Use `@Valid` annotation with Bean Validation constraints
+- Return field-level error details in response for form validation
+- Use HTTP 400 for client errors, 500 for server errors
+
 ## Code Comment Rules
 
 **1. Use Javadoc style (`/** */`) for classes and methods:**
