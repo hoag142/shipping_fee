@@ -6,24 +6,24 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO bọc response chung cho tất cả API
- * Giúp React xử lý response đồng nhất
+ * Generic wrapper DTO for all API responses
+ * Helps React handle responses consistently
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class ApiResponse<T> {
-    
+
     private boolean success;
     private String message;
     private T data;
-    
-    // Factory methods để tạo response nhanh
+
+    // Factory methods for quick response creation
     public static <T> ApiResponse<T> success(T data) {
         return ApiResponse.<T>builder()
                 .success(true)
-                .message("Thành công")
+                .message("Success")
                 .data(data)
                 .build();
     }

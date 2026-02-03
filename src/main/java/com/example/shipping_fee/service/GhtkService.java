@@ -1,5 +1,6 @@
 package com.example.shipping_fee.service;
 
+import com.example.shipping_fee.constant.ErrorMessages;
 import com.example.shipping_fee.dto.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -163,10 +164,98 @@ public class GhtkService {
     }
 
     /**
+     * Validate shipping request and collect all field errors
+     */
+    public List<ErrorMessageDTO> validateRequest(ShippingRequest request) {
+        List<ErrorMessageDTO> errors = new ArrayList<>();
+
+        // Validate toDistrictId (required)
+        if (request.getToDistrictId() == null) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_TO_DISTRICT_ID, ErrorMessages.ERR_TO_DISTRICT_REQUIRED));
+        }
+
+        // Validate toWardCode (required)
+        if (request.getToWardCode() == null || request.getToWardCode().trim().isEmpty()) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_TO_WARD_CODE, ErrorMessages.ERR_TO_WARD_REQUIRED));
+        }
+
+        // Validate weight (required, must be > 0, max 50kg)
+        if (request.getWeight() == null) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_REQUIRED));
+        } else if (request.getWeight() <= 0) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_INVALID));
+        } else if (request.getWeight() > 50000) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_MAX_EXCEEDED));
+        }
+
+        // Validate serviceTypeId (if provided, must be 1, 2, or 3)
+        if (request.getServiceTypeId() != null) {
+            int serviceType = request.getServiceTypeId();
+            if (serviceType < 1 || serviceType > 3) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_SERVICE_TYPE_ID, ErrorMessages.ERR_SERVICE_TYPE_INVALID));
+            }
+        }
+
+        // Validate insuranceValue (max 5,000,000)
+        if (request.getInsuranceValue() != null) {
+            if (request.getInsuranceValue() < 0) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_INSURANCE_VALUE, ErrorMessages.ERR_INSURANCE_VALUE_NEGATIVE));
+            } else if (request.getInsuranceValue() > 5000000) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_INSURANCE_VALUE, ErrorMessages.ERR_INSURANCE_VALUE_MAX_EXCEEDED));
+            }
+        }
+
+        // Validate codValue (max 5,000,000)
+        if (request.getCodValue() != null) {
+            if (request.getCodValue() < 0) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_COD_VALUE, ErrorMessages.ERR_COD_VALUE_NEGATIVE));
+            } else if (request.getCodValue() > 5000000) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_COD_VALUE, ErrorMessages.ERR_COD_VALUE_MAX_EXCEEDED));
+            }
+        }
+
+        // Validate dimensions (length, width, height)
+        if (request.getLength() != null) {
+            if (request.getLength() < 0) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_LENGTH, ErrorMessages.ERR_DIMENSION_NEGATIVE));
+            } else if (request.getLength() > 200) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_LENGTH, ErrorMessages.ERR_DIMENSION_MAX_EXCEEDED));
+            }
+        }
+        if (request.getWidth() != null) {
+            if (request.getWidth() < 0) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WIDTH, ErrorMessages.ERR_DIMENSION_NEGATIVE));
+            } else if (request.getWidth() > 200) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WIDTH, ErrorMessages.ERR_DIMENSION_MAX_EXCEEDED));
+            }
+        }
+        if (request.getHeight() != null) {
+            if (request.getHeight() < 0) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_HEIGHT, ErrorMessages.ERR_DIMENSION_NEGATIVE));
+            } else if (request.getHeight() > 200) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_HEIGHT, ErrorMessages.ERR_DIMENSION_MAX_EXCEEDED));
+            }
+        }
+
+        return errors;
+    }
+
+    /**
      * Calculate shipping fee via GHN API
      * API: POST /shiip/public-api/v2/shipping-order/fee
      */
     public ShippingResponse calculateFee(ShippingRequest request) {
+        // Validate request first
+        List<ErrorMessageDTO> errors = validateRequest(request);
+        if (!errors.isEmpty()) {
+            log.warn("Validation failed with {} errors", errors.size());
+            return ShippingResponse.builder()
+                    .success(false)
+                    .message(ErrorMessages.ERR_VALIDATION_FAILED)
+                    .errors(errors)
+                    .build();
+        }
+
         try {
             if (ghtkToken == null || ghtkToken.isEmpty()) {
                 log.warn("GHN Token not configured, using Mock Calculate");
@@ -228,7 +317,7 @@ public class GhtkService {
 
                     return ShippingResponse.builder()
                             .success(true)
-                            .message("Fee calculation successful")
+                            .message(ErrorMessages.MSG_FEE_CALCULATION_SUCCESS)
                             .total(parseInteger(data.get("total")))
                             .serviceFee(parseInteger(data.get("service_fee")))
                             .insuranceFee(parseInteger(data.get("insurance_fee")))
@@ -412,7 +501,7 @@ public class GhtkService {
 
         return ShippingResponse.builder()
                 .success(true)
-                .message("Fee calculation successful (Mock Data)")
+                .message(ErrorMessages.MSG_FEE_CALCULATION_SUCCESS_MOCK)
                 .total(total)
                 .serviceFee(serviceFee)
                 .insuranceFee(insuranceFee)

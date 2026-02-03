@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.shipping_fee.constant.ErrorMessages;
 import com.example.shipping_fee.dto.ApiResponse;
 import com.example.shipping_fee.dto.DistrictDTO;
 import com.example.shipping_fee.dto.ProvinceDTO;
@@ -114,27 +115,19 @@ public class ShippingController {
                 request.getFromDistrictId(), request.getToDistrictId(),
                 request.getToWardCode(), request.getWeight());
 
-        // Validate required fields
-        if (request.getToDistrictId() == null) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Please select delivery District"));
-        }
-        if (request.getToWardCode() == null || request.getToWardCode().isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Please select delivery Ward"));
-        }
-        if (request.getWeight() == null || request.getWeight() <= 0) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Please enter a valid weight (gram)"));
-        }
-
+        // Validation is handled in service layer
         ShippingResponse result = ghtkService.calculateFee(request);
 
         if (result.isSuccess()) {
-            return ResponseEntity.ok(ApiResponse.success(result, "Fee calculation successful"));
+            return ResponseEntity.ok(ApiResponse.success(result, ErrorMessages.MSG_FEE_CALCULATION_SUCCESS));
         } else {
+            // Return result with errors list for field-level validation
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error(result.getMessage()));
+                    .body(ApiResponse.<ShippingResponse>builder()
+                            .success(false)
+                            .message(result.getMessage())
+                            .data(result)
+                            .build());
         }
     }
 

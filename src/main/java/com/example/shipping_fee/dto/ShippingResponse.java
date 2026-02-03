@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * DTO Output - Shipping fee calculation result from GHN API
  * Docs: https://api.ghn.vn/home/docs/detail?id=76
@@ -18,6 +20,7 @@ public class ShippingResponse {
 
     private boolean success;          // Status: true = success, false = error
     private String message;           // Message (if error)
+    private List<ErrorMessageDTO> errors;  // List of field-level errors
 
     // Fee details from GHN API
     private Integer total;            // Total service fee (VND)
