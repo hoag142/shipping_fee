@@ -37,7 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/shipping")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*") // Allow React calls from localhost:3000
+@CrossOrigin(originPatterns = "*") // Allow React calls from localhost:3000
 public class ShippingController {
 
     private final GhtkService ghtkService;
