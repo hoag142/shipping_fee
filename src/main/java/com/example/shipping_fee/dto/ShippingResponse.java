@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO Output - Kết quả tính phí ship từ GHN API
+ * DTO Output - Shipping fee calculation result from GHN API
  * Docs: https://api.ghn.vn/home/docs/detail?id=76
  */
 @Data
@@ -16,43 +16,43 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ShippingResponse {
 
-    private boolean success;          // Trạng thái: true = thành công, false = lỗi
-    private String message;           // Thông báo (nếu có lỗi)
+    private boolean success;          // Status: true = success, false = error
+    private String message;           // Message (if error)
 
-    // === Chi tiết phí từ GHN API ===
-    private Integer total;            // Tổng phí dịch vụ (VND)
+    // Fee details from GHN API
+    private Integer total;            // Total service fee (VND)
 
     @JsonProperty("service_fee")
-    private Integer serviceFee;       // Phí dịch vụ cơ bản (VND)
+    private Integer serviceFee;       // Base service fee (VND)
 
     @JsonProperty("insurance_fee")
-    private Integer insuranceFee;     // Phí bảo hiểm (VND)
+    private Integer insuranceFee;     // Insurance fee (VND)
 
     @JsonProperty("pick_station_fee")
-    private Integer pickStationFee;   // Phí lấy hàng tại bưu cục (VND)
+    private Integer pickStationFee;   // Station pickup fee (VND)
 
     @JsonProperty("coupon_value")
-    private Integer couponValue;      // Giá trị giảm giá từ coupon (VND)
+    private Integer couponValue;      // Coupon discount value (VND)
 
     @JsonProperty("r2s_fee")
-    private Integer r2sFee;           // Phí giao lại (VND)
+    private Integer r2sFee;           // Return to sender fee (VND)
 
     @JsonProperty("document_return")
-    private Integer documentReturn;   // Phí trả chứng từ (VND)
+    private Integer documentReturn;   // Document return fee (VND)
 
     @JsonProperty("double_check")
-    private Integer doubleCheck;      // Phí kiểm tra hàng (VND)
+    private Integer doubleCheck;      // Double check fee (VND)
 
     @JsonProperty("cod_fee")
-    private Integer codFee;           // Phí thu hộ COD (VND)
+    private Integer codFee;           // COD collection fee (VND)
 
     @JsonProperty("pick_remote_areas_fee")
-    private Integer pickRemoteAreasFee;    // Phụ phí lấy hàng vùng xa (VND)
+    private Integer pickRemoteAreasFee;    // Remote area pickup surcharge (VND)
 
     @JsonProperty("deliver_remote_areas_fee")
-    private Integer deliverRemoteAreasFee; // Phụ phí giao hàng vùng xa (VND)
+    private Integer deliverRemoteAreasFee; // Remote area delivery surcharge (VND)
 
     @JsonProperty("cod_failed_fee")
-    private Integer codFailedFee;     // Phí khi thu COD thất bại (VND)
+    private Integer codFailedFee;     // Failed COD collection fee (VND)
 
 }

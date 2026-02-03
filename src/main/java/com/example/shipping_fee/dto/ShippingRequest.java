@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO Input - Nhận dữ liệu từ React gửi lên để tính phí ship qua GHN API
+ * DTO Input - Request data from React to calculate shipping fee via GHN API
  * Docs: https://api.ghn.vn/home/docs/detail?id=76
  */
 @Data
@@ -16,44 +16,44 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ShippingRequest {
 
-    // === Địa chỉ lấy hàng (Người gửi) - Optional, tự động lấy từ shop nếu không truyền ===
+    // Pickup address (Sender) - Optional, auto-fetched from shop if not provided
     @JsonProperty("from_district_id")
-    private Integer fromDistrictId;       // ID Quận/Huyện gửi
+    private Integer fromDistrictId;       // Sender District ID
 
     @JsonProperty("from_ward_code")
-    private String fromWardCode;          // Mã Phường/Xã gửi
+    private String fromWardCode;          // Sender Ward Code
 
-    // === Địa chỉ giao hàng (Người nhận) - Required ===
+    // Delivery address (Receiver) - Required
     @JsonProperty("to_district_id")
-    private Integer toDistrictId;         // ID Quận/Huyện nhận (bắt buộc)
+    private Integer toDistrictId;         // Receiver District ID (required)
 
     @JsonProperty("to_ward_code")
-    private String toWardCode;            // Mã Phường/Xã nhận (bắt buộc)
+    private String toWardCode;            // Receiver Ward Code (required)
 
-    // === Thông tin dịch vụ ===
+    // Service information
     @JsonProperty("service_id")
-    private Integer serviceId;            // ID dịch vụ (lấy từ Service API)
+    private Integer serviceId;            // Service ID (from Service API)
 
     @JsonProperty("service_type_id")
-    private Integer serviceTypeId;        // Loại dịch vụ: 1=Nhanh, 2=Chuẩn, 3=Tiết kiệm
+    private Integer serviceTypeId;        // Service type: 1=Express, 2=Standard, 3=Economy
 
-    // === Thông tin hàng hóa ===
-    private Integer weight;               // Cân nặng (gram)
-    private Integer length;               // Chiều dài (cm)
-    private Integer width;                // Chiều rộng (cm)
-    private Integer height;               // Chiều cao (cm)
+    // Package information
+    private Integer weight;               // Weight (gram)
+    private Integer length;               // Length (cm)
+    private Integer width;                // Width (cm)
+    private Integer height;               // Height (cm)
 
-    // === Giá trị & Phí ===
+    // Value and fees
     @JsonProperty("insurance_value")
-    private Integer insuranceValue;       // Giá trị hàng hóa để tính bảo hiểm (VND), max 5,000,000
+    private Integer insuranceValue;       // Goods value for insurance (VND), max 5,000,000
 
     @JsonProperty("cod_value")
-    private Integer codValue;             // Số tiền thu hộ COD (VND), max 5,000,000
+    private Integer codValue;             // COD amount (VND), max 5,000,000
 
     @JsonProperty("cod_failed_amount")
-    private Integer codFailedAmount;      // Số tiền thu khi giao thất bại
+    private Integer codFailedAmount;      // Amount to collect on failed delivery
 
-    // === Khuyến mãi ===
-    private String coupon;                // Mã giảm giá
+    // Promotion
+    private String coupon;                // Discount code
 
 }
