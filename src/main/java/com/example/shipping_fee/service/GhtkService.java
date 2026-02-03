@@ -58,7 +58,7 @@ public class GhtkService {
                 return getMockProvinces();
             }
 
-            String url = ghtkBaseUrl + "/services/address/getprovince";
+            String url = ghtkBaseUrl + "/shiip/public-api/master-data/province";
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
 
             ResponseEntity<Map> response = restTemplate.exchange(
@@ -66,13 +66,14 @@ public class GhtkService {
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                if (Boolean.TRUE.equals(body.get("success"))) {
+                Integer code = parseInteger(body.get("code"));
+                if (code != null && code == 200) {
                     List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
                     List<ProvinceDTO> provinces = new ArrayList<>();
-                    
+
                     for (Map<String, Object> item : data) {
                         ProvinceDTO dto = new ProvinceDTO();
-                        dto.setProvinceId((Integer) item.get("ProvinceID"));
+                        dto.setProvinceId(parseInteger(item.get("ProvinceID")));
                         dto.setProvinceName((String) item.get("ProvinceName"));
                         dto.setCode((String) item.get("Code"));
                         provinces.add(dto);
@@ -96,7 +97,7 @@ public class GhtkService {
                 return getMockDistricts(provinceId);
             }
 
-            String url = ghtkBaseUrl + "/services/address/getdistrict?province_id=" + provinceId;
+            String url = ghtkBaseUrl + "/shiip/public-api/master-data/district?province_id=" + provinceId;
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
 
             ResponseEntity<Map> response = restTemplate.exchange(
@@ -104,14 +105,15 @@ public class GhtkService {
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                if (Boolean.TRUE.equals(body.get("success"))) {
+                Integer code = parseInteger(body.get("code"));
+                if (code != null && code == 200) {
                     List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
                     List<DistrictDTO> districts = new ArrayList<>();
-                    
+
                     for (Map<String, Object> item : data) {
                         DistrictDTO dto = new DistrictDTO();
-                        dto.setId((Integer) item.get("id"));
-                        dto.setName((String) item.get("name"));
+                        dto.setId(parseInteger(item.get("DistrictID")));
+                        dto.setName((String) item.get("DistrictName"));
                         dto.setProvinceId(provinceId);
                         districts.add(dto);
                     }
@@ -134,7 +136,7 @@ public class GhtkService {
                 return getMockWards(districtId);
             }
 
-            String url = ghtkBaseUrl + "/services/address/getward?district_id=" + districtId;
+            String url = ghtkBaseUrl + "/shiip/public-api/master-data/ward?district_id=" + districtId;
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
 
             ResponseEntity<Map> response = restTemplate.exchange(
@@ -142,14 +144,17 @@ public class GhtkService {
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                if (Boolean.TRUE.equals(body.get("success"))) {
+                Integer code = parseInteger(body.get("code"));
+                if (code != null && code == 200) {
                     List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
                     List<WardDTO> wards = new ArrayList<>();
-                    
+
                     for (Map<String, Object> item : data) {
                         WardDTO dto = new WardDTO();
-                        dto.setId((Integer) item.get("id"));
-                        dto.setName((String) item.get("name"));
+                        // WardCode can be returned as Integer or String, convert to String
+                        Object wardCodeObj = item.get("WardCode");
+                        dto.setWardCode(wardCodeObj != null ? String.valueOf(wardCodeObj) : null);
+                        dto.setName((String) item.get("WardName"));
                         dto.setDistrictId(districtId);
                         wards.add(dto);
                     }
@@ -165,6 +170,7 @@ public class GhtkService {
 
     /**
      * Validate shipping request and collect all field errors
+     * Note: fromDistrictId and fromWardCode are optional - GHN API uses shop's default address if not provided
      */
     public List<ErrorMessageDTO> validateRequest(ShippingRequest request) {
         List<ErrorMessageDTO> errors = new ArrayList<>();
@@ -462,11 +468,11 @@ public class GhtkService {
      */
     private List<WardDTO> getMockWards(Integer districtId) {
         return Arrays.asList(
-                new WardDTO(1000 + districtId, "Phường 1", districtId),
-                new WardDTO(2000 + districtId, "Phường 2", districtId),
-                new WardDTO(3000 + districtId, "Phường 3", districtId),
-                new WardDTO(4000 + districtId, "Xã A", districtId),
-                new WardDTO(5000 + districtId, "Xã B", districtId)
+                new WardDTO(String.valueOf(1000 + districtId), "Phường 1", districtId),
+                new WardDTO(String.valueOf(2000 + districtId), "Phường 2", districtId),
+                new WardDTO(String.valueOf(3000 + districtId), "Phường 3", districtId),
+                new WardDTO(String.valueOf(4000 + districtId), "Xã A", districtId),
+                new WardDTO(String.valueOf(5000 + districtId), "Xã B", districtId)
         );
     }
 

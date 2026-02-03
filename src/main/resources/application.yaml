@@ -4,16 +4,16 @@ spring:
 
 server:
   port: 8080
-# GHTK Configuration
+# GHN Configuration
 ghtk:
   api:
-    # API Token From GHTK
+    # API Token From GHN
     token: "4658225d-ff62-11f0-bc77-e205e6d9b297"
-    # Shop ID
-    shop-id: 5158895
-    # Test
-    base-url: https://dev-online-gateway.ghn.vn  
-    # base-url: https://online-gateway.ghn.vn   # Production
+    # Shop ID (lấy từ GHN API /v2/shop/all, KHÔNG phải client_id)
+    shop-id: 6250039
+    # Production URL (token này là production token)
+    base-url: https://online-gateway.ghn.vn
+    # base-url: https://dev-online-gateway.ghn.vn   # Test
 
 logging:
   level:

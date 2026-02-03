@@ -10,6 +10,8 @@ public final class ErrorMessages {
     }
 
     // Field names
+    public static final String FIELD_FROM_DISTRICT_ID = "fromDistrictId";
+    public static final String FIELD_FROM_WARD_CODE = "fromWardCode";
     public static final String FIELD_TO_DISTRICT_ID = "toDistrictId";
     public static final String FIELD_TO_WARD_CODE = "toWardCode";
     public static final String FIELD_WEIGHT = "weight";
@@ -21,6 +23,8 @@ public final class ErrorMessages {
     public static final String FIELD_HEIGHT = "height";
 
     // Validation error messages
+    public static final String ERR_FROM_DISTRICT_REQUIRED = "Pickup district is required";
+    public static final String ERR_FROM_WARD_REQUIRED = "Pickup ward is required";
     public static final String ERR_TO_DISTRICT_REQUIRED = "Delivery district is required";
     public static final String ERR_TO_WARD_REQUIRED = "Delivery ward is required";
     public static final String ERR_WEIGHT_REQUIRED = "Weight is required";

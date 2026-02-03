@@ -5,16 +5,20 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO chứa thông tin Quận/Huyện
- * Dùng để đổ vào dropdown chọn địa chỉ cấp 2
+ * DTO District information (level 2)
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class DistrictDTO {
     
+    // District ID
     private Integer id;
+
+    // District Name
     private String name;
+
+    // Province ID
     private Integer provinceId;
     
 }

@@ -5,16 +5,21 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO chứa thông tin Phường/Xã
- * Dùng để đổ vào dropdown chọn địa chỉ cấp 3 (cấp 4 sau sát nhập)
+ * DTO Ward information (level 3)
+ * Used to populate dropdown for selecting level 3 address
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class WardDTO {
-    
-    private Integer id;
+
+    // Ward Code (GHN API returns WardCode as String, not Integer)
+    private String wardCode;
+
+    // Ward Name
     private String name;
+
+    // District ID
     private Integer districtId;
-    
+
 }

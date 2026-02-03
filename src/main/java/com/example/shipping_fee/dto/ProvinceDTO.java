@@ -5,14 +5,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO information Province
+ * DTO information Province (level 1)
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProvinceDTO {
 
-    // Provnince ID 
+    // Province ID 
     private Integer provinceId;
 
     // Province Name
