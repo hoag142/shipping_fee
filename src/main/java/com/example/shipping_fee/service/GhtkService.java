@@ -8,7 +8,11 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Service for GHN API business logic
@@ -30,13 +34,8 @@ public class GhtkService {
     private static final int MIN_SERVICE_TYPE = 1;
     private static final int MAX_SERVICE_TYPE = 3;
 
-    // Mock calculation constants
-    private static final int MOCK_BASE_FEE = 15000;
-    private static final int MOCK_WEIGHT_UNIT_GRAMS = 500;
-    private static final int MOCK_WEIGHT_FEE_PER_UNIT = 5000;
-    private static final int MOCK_DISTANCE_FEE = 20000;
-    private static final double MOCK_INSURANCE_RATE = 0.005;
-    private static final double MOCK_COD_RATE = 0.01;
+    // Error message for missing token
+    private static final String ERR_TOKEN_NOT_CONFIGURED = "GHN API token is not configured";
 
     @Value("${ghtk.api.token:}")
     private String ghtkToken;
@@ -78,14 +77,14 @@ public class GhtkService {
     /**
      * Get list of Provinces/Cities from GHN
      * API: GET /shiip/public-api/master-data/province
-     *
-     * If token is missing or API fails -> return Mock Data
+     * @return List of provinces or empty list with error logged
+     * @throws IllegalStateException if token is not configured
      */
     @SuppressWarnings("unchecked")
     public List<ProvinceDTO> getProvinces() {
         if (!isTokenConfigured()) {
-            log.warn("GHN Token not configured, using Mock Data");
-            return getMockProvinces();
+            log.error(ERR_TOKEN_NOT_CONFIGURED);
+            throw new IllegalStateException(ERR_TOKEN_NOT_CONFIGURED);
         }
 
         try {
@@ -104,11 +103,14 @@ public class GhtkService {
                     return parseProvinces(data);
                 }
             }
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error calling GHN API to get province list: {}", e.getMessage());
+            throw new RuntimeException(ErrorMessages.ERR_API_CALL_FAILED, e);
         }
 
-        return getMockProvinces();
+        return Collections.emptyList();
     }
 
     /**
@@ -130,11 +132,13 @@ public class GhtkService {
      * Get list of Districts by Province
      * @param provinceId Province ID to get districts for
      * @return List of districts in the province
+     * @throws IllegalStateException if token is not configured
      */
     @SuppressWarnings("unchecked")
     public List<DistrictDTO> getDistricts(Integer provinceId) {
         if (!isTokenConfigured()) {
-            return getMockDistricts(provinceId);
+            log.error(ERR_TOKEN_NOT_CONFIGURED);
+            throw new IllegalStateException(ERR_TOKEN_NOT_CONFIGURED);
         }
 
         try {
@@ -153,11 +157,14 @@ public class GhtkService {
                     return parseDistricts(data, provinceId);
                 }
             }
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error calling GHN API to get district list: {}", e.getMessage());
+            throw new RuntimeException(ErrorMessages.ERR_API_CALL_FAILED, e);
         }
 
-        return getMockDistricts(provinceId);
+        return Collections.emptyList();
     }
 
     /**
@@ -179,11 +186,13 @@ public class GhtkService {
      * Get list of Wards by District
      * @param districtId District ID to get wards for
      * @return List of wards in the district
+     * @throws IllegalStateException if token is not configured
      */
     @SuppressWarnings("unchecked")
     public List<WardDTO> getWards(Integer districtId) {
         if (!isTokenConfigured()) {
-            return getMockWards(districtId);
+            log.error(ERR_TOKEN_NOT_CONFIGURED);
+            throw new IllegalStateException(ERR_TOKEN_NOT_CONFIGURED);
         }
 
         try {
@@ -202,11 +211,14 @@ public class GhtkService {
                     return parseWards(data, districtId);
                 }
             }
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error calling GHN API to get ward list: {}", e.getMessage());
+            throw new RuntimeException(ErrorMessages.ERR_API_CALL_FAILED, e);
         }
 
-        return getMockWards(districtId);
+        return Collections.emptyList();
     }
 
     /**
@@ -346,17 +358,22 @@ public class GhtkService {
         }
 
         if (!isTokenConfigured()) {
-            log.warn("GHN Token not configured, using Mock Calculate");
-            return calculateMockFee(request);
+            log.error(ERR_TOKEN_NOT_CONFIGURED);
+            return ShippingResponse.builder()
+                    .success(false)
+                    .message(ERR_TOKEN_NOT_CONFIGURED)
+                    .build();
         }
 
         try {
             return callGhnFeeApi(request);
         } catch (Exception e) {
             log.error("Error calling GHN API to calculate fee: {}", e.getMessage());
+            return ShippingResponse.builder()
+                    .success(false)
+                    .message(ErrorMessages.ERR_API_CALL_FAILED + ": " + e.getMessage())
+                    .build();
         }
-
-        return calculateMockFee(request);
     }
 
     /**
@@ -399,7 +416,10 @@ public class GhtkService {
             }
         }
 
-        return calculateMockFee(request);
+        return ShippingResponse.builder()
+                .success(false)
+                .message(ErrorMessages.ERR_API_CALL_FAILED)
+                .build();
     }
 
     /**
@@ -463,189 +483,6 @@ public class GhtkService {
                 .deliverRemoteAreasFee(parseInteger(data.get("deliver_remote_areas_fee")))
                 .codFailedFee(parseInteger(data.get("cod_failed_fee")))
                 .build();
-    }
-
-    /**
-     * Mock list of 63 Vietnam Provinces/Cities
-     */
-    private List<ProvinceDTO> getMockProvinces() {
-        return Arrays.asList(
-                new ProvinceDTO(1, "Hà Nội", "HN"),
-                new ProvinceDTO(2, "Hồ Chí Minh", "HCM"),
-                new ProvinceDTO(3, "Đà Nẵng", "DN"),
-                new ProvinceDTO(4, "Hải Phòng", "HP"),
-                new ProvinceDTO(5, "Cần Thơ", "CT"),
-                new ProvinceDTO(6, "An Giang", "AG"),
-                new ProvinceDTO(7, "Bà Rịa - Vũng Tàu", "BRVT"),
-                new ProvinceDTO(8, "Bắc Giang", "BG"),
-                new ProvinceDTO(9, "Bắc Kạn", "BK"),
-                new ProvinceDTO(10, "Bạc Liêu", "BL"),
-                new ProvinceDTO(11, "Bắc Ninh", "BN"),
-                new ProvinceDTO(12, "Bến Tre", "BT"),
-                new ProvinceDTO(13, "Bình Định", "BD"),
-                new ProvinceDTO(14, "Bình Dương", "BDG"),
-                new ProvinceDTO(15, "Bình Phước", "BP"),
-                new ProvinceDTO(16, "Bình Thuận", "BTH"),
-                new ProvinceDTO(17, "Cà Mau", "CM"),
-                new ProvinceDTO(18, "Cao Bằng", "CB"),
-                new ProvinceDTO(19, "Đắk Lắk", "DL"),
-                new ProvinceDTO(20, "Đắk Nông", "DNG"),
-                new ProvinceDTO(21, "Điện Biên", "DB"),
-                new ProvinceDTO(22, "Đồng Nai", "DNI"),
-                new ProvinceDTO(23, "Đồng Tháp", "DT"),
-                new ProvinceDTO(24, "Gia Lai", "GL"),
-                new ProvinceDTO(25, "Hà Giang", "HG"),
-                new ProvinceDTO(26, "Hà Nam", "HNA"),
-                new ProvinceDTO(27, "Hà Tĩnh", "HT"),
-                new ProvinceDTO(28, "Hải Dương", "HD"),
-                new ProvinceDTO(29, "Hậu Giang", "HAG"),
-                new ProvinceDTO(30, "Hòa Bình", "HB"),
-                new ProvinceDTO(31, "Hưng Yên", "HY"),
-                new ProvinceDTO(32, "Khánh Hòa", "KH"),
-                new ProvinceDTO(33, "Kiên Giang", "KG"),
-                new ProvinceDTO(34, "Kon Tum", "KT"),
-                new ProvinceDTO(35, "Lai Châu", "LC"),
-                new ProvinceDTO(36, "Lâm Đồng", "LD"),
-                new ProvinceDTO(37, "Lạng Sơn", "LS"),
-                new ProvinceDTO(38, "Lào Cai", "LCA"),
-                new ProvinceDTO(39, "Long An", "LA"),
-                new ProvinceDTO(40, "Nam Định", "ND"),
-                new ProvinceDTO(41, "Nghệ An", "NA"),
-                new ProvinceDTO(42, "Ninh Bình", "NB"),
-                new ProvinceDTO(43, "Ninh Thuận", "NT"),
-                new ProvinceDTO(44, "Phú Thọ", "PT"),
-                new ProvinceDTO(45, "Phú Yên", "PY"),
-                new ProvinceDTO(46, "Quảng Bình", "QB"),
-                new ProvinceDTO(47, "Quảng Nam", "QNA"),
-                new ProvinceDTO(48, "Quảng Ngãi", "QNG"),
-                new ProvinceDTO(49, "Quảng Ninh", "QN"),
-                new ProvinceDTO(50, "Quảng Trị", "QT"),
-                new ProvinceDTO(51, "Sóc Trăng", "ST"),
-                new ProvinceDTO(52, "Sơn La", "SL"),
-                new ProvinceDTO(53, "Tây Ninh", "TN"),
-                new ProvinceDTO(54, "Thái Bình", "TB"),
-                new ProvinceDTO(55, "Thái Nguyên", "TNG"),
-                new ProvinceDTO(56, "Thanh Hóa", "TH"),
-                new ProvinceDTO(57, "Thừa Thiên Huế", "TTH"),
-                new ProvinceDTO(58, "Tiền Giang", "TG"),
-                new ProvinceDTO(59, "Trà Vinh", "TV"),
-                new ProvinceDTO(60, "Tuyên Quang", "TQ"),
-                new ProvinceDTO(61, "Vĩnh Long", "VL"),
-                new ProvinceDTO(62, "Vĩnh Phúc", "VP"),
-                new ProvinceDTO(63, "Yên Bái", "YB")
-        );
-    }
-
-    /**
-     * Mock list of Districts (sample)
-     */
-    private List<DistrictDTO> getMockDistricts(Integer provinceId) {
-        // Mock some sample districts for Hanoi and HCMC
-        if (provinceId == 1) { // Hanoi
-            return Arrays.asList(
-                    new DistrictDTO(1, "Quận Ba Đình", 1),
-                    new DistrictDTO(2, "Quận Hoàn Kiếm", 1),
-                    new DistrictDTO(3, "Quận Tây Hồ", 1),
-                    new DistrictDTO(4, "Quận Long Biên", 1),
-                    new DistrictDTO(5, "Quận Cầu Giấy", 1),
-                    new DistrictDTO(6, "Quận Đống Đa", 1),
-                    new DistrictDTO(7, "Quận Hai Bà Trưng", 1),
-                    new DistrictDTO(8, "Quận Hoàng Mai", 1),
-                    new DistrictDTO(9, "Quận Thanh Xuân", 1),
-                    new DistrictDTO(10, "Huyện Sóc Sơn", 1)
-            );
-        } else if (provinceId == 2) { // HCMC
-            return Arrays.asList(
-                    new DistrictDTO(11, "Quận 1", 2),
-                    new DistrictDTO(12, "Quận 3", 2),
-                    new DistrictDTO(13, "Quận 4", 2),
-                    new DistrictDTO(14, "Quận 5", 2),
-                    new DistrictDTO(15, "Quận 7", 2),
-                    new DistrictDTO(16, "Quận 10", 2),
-                    new DistrictDTO(17, "Quận Bình Thạnh", 2),
-                    new DistrictDTO(18, "Quận Gò Vấp", 2),
-                    new DistrictDTO(19, "Quận Tân Bình", 2),
-                    new DistrictDTO(20, "Thành phố Thủ Đức", 2)
-            );
-        }
-
-        // Return generic mock for other provinces
-        return Arrays.asList(
-                new DistrictDTO(100 + provinceId, "Thành phố/Thị xã " + provinceId, provinceId),
-                new DistrictDTO(200 + provinceId, "Huyện A", provinceId),
-                new DistrictDTO(300 + provinceId, "Huyện B", provinceId)
-        );
-    }
-
-    /**
-     * Mock list of Wards (sample)
-     */
-    private List<WardDTO> getMockWards(Integer districtId) {
-        return Arrays.asList(
-                new WardDTO(String.valueOf(1000 + districtId), "Phường 1", districtId),
-                new WardDTO(String.valueOf(2000 + districtId), "Phường 2", districtId),
-                new WardDTO(String.valueOf(3000 + districtId), "Phường 3", districtId),
-                new WardDTO(String.valueOf(4000 + districtId), "Xã A", districtId),
-                new WardDTO(String.valueOf(5000 + districtId), "Xã B", districtId)
-        );
-    }
-
-    /**
-     * Mock shipping fee calculation when Token is not configured
-     */
-    private ShippingResponse calculateMockFee(ShippingRequest request) {
-        int weightFee = (request.getWeight() / MOCK_WEIGHT_UNIT_GRAMS) * MOCK_WEIGHT_FEE_PER_UNIT;
-        int distanceFee = isSameDistrict(request) ? 0 : MOCK_DISTANCE_FEE;
-        int serviceFee = MOCK_BASE_FEE + weightFee + distanceFee;
-
-        int insuranceFee = calculateMockInsuranceFee(request.getInsuranceValue());
-        int codFee = calculateMockCodFee(request.getCodValue());
-        int total = serviceFee + insuranceFee + codFee;
-
-        return ShippingResponse.builder()
-                .success(true)
-                .message(ErrorMessages.MSG_FEE_CALCULATION_SUCCESS_MOCK)
-                .total(total)
-                .serviceFee(serviceFee)
-                .insuranceFee(insuranceFee)
-                .pickStationFee(0)
-                .couponValue(0)
-                .r2sFee(0)
-                .documentReturn(0)
-                .doubleCheck(0)
-                .codFee(codFee)
-                .pickRemoteAreasFee(0)
-                .deliverRemoteAreasFee(0)
-                .codFailedFee(0)
-                .build();
-    }
-
-    /**
-     * Check if origin and destination are in the same district
-     */
-    private boolean isSameDistrict(ShippingRequest request) {
-        return request.getFromDistrictId() != null
-                && request.getFromDistrictId().equals(request.getToDistrictId());
-    }
-
-    /**
-     * Calculate mock insurance fee (0.5% of goods value)
-     */
-    private int calculateMockInsuranceFee(Integer insuranceValue) {
-        if (insuranceValue != null && insuranceValue > 0) {
-            return (int) (insuranceValue * MOCK_INSURANCE_RATE);
-        }
-        return 0;
-    }
-
-    /**
-     * Calculate mock COD fee (1% of COD value)
-     */
-    private int calculateMockCodFee(Integer codValue) {
-        if (codValue != null && codValue > 0) {
-            return (int) (codValue * MOCK_COD_RATE);
-        }
-        return 0;
     }
 
     /**
