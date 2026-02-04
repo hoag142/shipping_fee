@@ -9,7 +9,7 @@ ghtk:
   api:
     # API Token From GHN
     token: "4658225d-ff62-11f0-bc77-e205e6d9b297"
-    # Shop ID (lấy từ GHN API /v2/shop/all, KHÔNG phải client_id)
+    # Shop ID
     shop-id: 6250039
     # Production URL (token này là production token)
     base-url: https://online-gateway.ghn.vn

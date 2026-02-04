@@ -45,4 +45,7 @@ public final class ErrorMessages {
     // General error messages
     public static final String ERR_VALIDATION_FAILED = "Validation failed";
     public static final String ERR_API_CALL_FAILED = "Failed to call GHN API";
+
+    // GHN token expired
+    public static final String ERR_GHN_TOKEN_EXPIRED = "GHN token has expired. Please refresh the token.";
 }
