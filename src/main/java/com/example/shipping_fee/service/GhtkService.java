@@ -19,6 +19,25 @@ import java.util.*;
 @Slf4j
 public class GhtkService {
 
+    // API response codes
+    private static final int API_SUCCESS_CODE = 200;
+
+    // Validation limits
+    private static final int MAX_WEIGHT_GRAMS = 50000;
+    private static final int MAX_INSURANCE_VALUE = 5000000;
+    private static final int MAX_COD_VALUE = 5000000;
+    private static final int MAX_DIMENSION_CM = 200;
+    private static final int MIN_SERVICE_TYPE = 1;
+    private static final int MAX_SERVICE_TYPE = 3;
+
+    // Mock calculation constants
+    private static final int MOCK_BASE_FEE = 15000;
+    private static final int MOCK_WEIGHT_UNIT_GRAMS = 500;
+    private static final int MOCK_WEIGHT_FEE_PER_UNIT = 5000;
+    private static final int MOCK_DISTANCE_FEE = 20000;
+    private static final double MOCK_INSURANCE_RATE = 0.005;
+    private static final double MOCK_COD_RATE = 0.01;
+
     @Value("${ghtk.api.token:}")
     private String ghtkToken;
 
@@ -34,6 +53,10 @@ public class GhtkService {
         this.restTemplate = new RestTemplate();
     }
 
+    public GhtkService(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
     /**
      * Create HttpHeaders with Token and ShopId for GHN API
      */
@@ -46,39 +69,39 @@ public class GhtkService {
     }
 
     /**
+     * Check if API token is configured
+     */
+    private boolean isTokenConfigured() {
+        return ghtkToken != null && !ghtkToken.isEmpty();
+    }
+
+    /**
      * Get list of Provinces/Cities from GHN
-     * API: GET /services/shipment/list_pick_add
+     * API: GET /shiip/public-api/master-data/province
      *
      * If token is missing or API fails -> return Mock Data
      */
+    @SuppressWarnings("unchecked")
     public List<ProvinceDTO> getProvinces() {
-        try {
-            if (ghtkToken == null || ghtkToken.isEmpty()) {
-                log.warn("GHN Token not configured, using Mock Data");
-                return getMockProvinces();
-            }
+        if (!isTokenConfigured()) {
+            log.warn("GHN Token not configured, using Mock Data");
+            return getMockProvinces();
+        }
 
+        try {
             String url = ghtkBaseUrl + "/shiip/public-api/master-data/province";
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
 
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, Map.class);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, (Class<Map<String, Object>>) (Class<?>) Map.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
                 Integer code = parseInteger(body.get("code"));
-                if (code != null && code == 200) {
-                    List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
-                    List<ProvinceDTO> provinces = new ArrayList<>();
 
-                    for (Map<String, Object> item : data) {
-                        ProvinceDTO dto = new ProvinceDTO();
-                        dto.setProvinceId(parseInteger(item.get("ProvinceID")));
-                        dto.setProvinceName((String) item.get("ProvinceName"));
-                        dto.setCode((String) item.get("Code"));
-                        provinces.add(dto);
-                    }
-                    return provinces;
+                if (code != null && code == API_SUCCESS_CODE) {
+                    List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
+                    return parseProvinces(data);
                 }
             }
         } catch (Exception e) {
@@ -89,35 +112,45 @@ public class GhtkService {
     }
 
     /**
-     * Get list of Districts by Province
+     * Parse province data from API response
      */
-    public List<DistrictDTO> getDistricts(Integer provinceId) {
-        try {
-            if (ghtkToken == null || ghtkToken.isEmpty()) {
-                return getMockDistricts(provinceId);
-            }
+    private List<ProvinceDTO> parseProvinces(List<Map<String, Object>> data) {
+        List<ProvinceDTO> provinces = new ArrayList<>();
+        for (Map<String, Object> item : data) {
+            ProvinceDTO dto = new ProvinceDTO();
+            dto.setProvinceId(parseInteger(item.get("ProvinceID")));
+            dto.setProvinceName((String) item.get("ProvinceName"));
+            dto.setCode((String) item.get("Code"));
+            provinces.add(dto);
+        }
+        return provinces;
+    }
 
+    /**
+     * Get list of Districts by Province
+     * @param provinceId Province ID to get districts for
+     * @return List of districts in the province
+     */
+    @SuppressWarnings("unchecked")
+    public List<DistrictDTO> getDistricts(Integer provinceId) {
+        if (!isTokenConfigured()) {
+            return getMockDistricts(provinceId);
+        }
+
+        try {
             String url = ghtkBaseUrl + "/shiip/public-api/master-data/district?province_id=" + provinceId;
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
 
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, Map.class);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, (Class<Map<String, Object>>) (Class<?>) Map.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
                 Integer code = parseInteger(body.get("code"));
-                if (code != null && code == 200) {
-                    List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
-                    List<DistrictDTO> districts = new ArrayList<>();
 
-                    for (Map<String, Object> item : data) {
-                        DistrictDTO dto = new DistrictDTO();
-                        dto.setId(parseInteger(item.get("DistrictID")));
-                        dto.setName((String) item.get("DistrictName"));
-                        dto.setProvinceId(provinceId);
-                        districts.add(dto);
-                    }
-                    return districts;
+                if (code != null && code == API_SUCCESS_CODE) {
+                    List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
+                    return parseDistricts(data, provinceId);
                 }
             }
         } catch (Exception e) {
@@ -128,37 +161,45 @@ public class GhtkService {
     }
 
     /**
-     * Get list of Wards by District
+     * Parse district data from API response
      */
-    public List<WardDTO> getWards(Integer districtId) {
-        try {
-            if (ghtkToken == null || ghtkToken.isEmpty()) {
-                return getMockWards(districtId);
-            }
+    private List<DistrictDTO> parseDistricts(List<Map<String, Object>> data, Integer provinceId) {
+        List<DistrictDTO> districts = new ArrayList<>();
+        for (Map<String, Object> item : data) {
+            DistrictDTO dto = new DistrictDTO();
+            dto.setId(parseInteger(item.get("DistrictID")));
+            dto.setName((String) item.get("DistrictName"));
+            dto.setProvinceId(provinceId);
+            districts.add(dto);
+        }
+        return districts;
+    }
 
+    /**
+     * Get list of Wards by District
+     * @param districtId District ID to get wards for
+     * @return List of wards in the district
+     */
+    @SuppressWarnings("unchecked")
+    public List<WardDTO> getWards(Integer districtId) {
+        if (!isTokenConfigured()) {
+            return getMockWards(districtId);
+        }
+
+        try {
             String url = ghtkBaseUrl + "/shiip/public-api/master-data/ward?district_id=" + districtId;
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
 
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, Map.class);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, (Class<Map<String, Object>>) (Class<?>) Map.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
                 Integer code = parseInteger(body.get("code"));
-                if (code != null && code == 200) {
-                    List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
-                    List<WardDTO> wards = new ArrayList<>();
 
-                    for (Map<String, Object> item : data) {
-                        WardDTO dto = new WardDTO();
-                        // WardCode can be returned as Integer or String, convert to String
-                        Object wardCodeObj = item.get("WardCode");
-                        dto.setWardCode(wardCodeObj != null ? String.valueOf(wardCodeObj) : null);
-                        dto.setName((String) item.get("WardName"));
-                        dto.setDistrictId(districtId);
-                        wards.add(dto);
-                    }
-                    return wards;
+                if (code != null && code == API_SUCCESS_CODE) {
+                    List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
+                    return parseWards(data, districtId);
                 }
             }
         } catch (Exception e) {
@@ -169,186 +210,259 @@ public class GhtkService {
     }
 
     /**
+     * Parse ward data from API response
+     */
+    private List<WardDTO> parseWards(List<Map<String, Object>> data, Integer districtId) {
+        List<WardDTO> wards = new ArrayList<>();
+        for (Map<String, Object> item : data) {
+            WardDTO dto = new WardDTO();
+            // WardCode can be returned as Integer or String, convert to String
+            Object wardCodeObj = item.get("WardCode");
+            dto.setWardCode(wardCodeObj != null ? String.valueOf(wardCodeObj) : null);
+            dto.setName((String) item.get("WardName"));
+            dto.setDistrictId(districtId);
+            wards.add(dto);
+        }
+        return wards;
+    }
+
+    /**
      * Validate shipping request and collect all field errors
      * Note: fromDistrictId and fromWardCode are optional - GHN API uses shop's default address if not provided
+     * @param request Shipping request to validate
+     * @return List of validation errors (empty if valid)
      */
     public List<ErrorMessageDTO> validateRequest(ShippingRequest request) {
         List<ErrorMessageDTO> errors = new ArrayList<>();
 
-        // Validate toDistrictId (required)
-        if (request.getToDistrictId() == null) {
-            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_TO_DISTRICT_ID, ErrorMessages.ERR_TO_DISTRICT_REQUIRED));
-        }
-
-        // Validate toWardCode (required)
-        if (request.getToWardCode() == null || request.getToWardCode().trim().isEmpty()) {
-            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_TO_WARD_CODE, ErrorMessages.ERR_TO_WARD_REQUIRED));
-        }
-
-        // Validate weight (required, must be > 0, max 50kg)
-        if (request.getWeight() == null) {
-            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_REQUIRED));
-        } else if (request.getWeight() <= 0) {
-            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_INVALID));
-        } else if (request.getWeight() > 50000) {
-            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_MAX_EXCEEDED));
-        }
-
-        // Validate serviceTypeId (if provided, must be 1, 2, or 3)
-        if (request.getServiceTypeId() != null) {
-            int serviceType = request.getServiceTypeId();
-            if (serviceType < 1 || serviceType > 3) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_SERVICE_TYPE_ID, ErrorMessages.ERR_SERVICE_TYPE_INVALID));
-            }
-        }
-
-        // Validate insuranceValue (max 5,000,000)
-        if (request.getInsuranceValue() != null) {
-            if (request.getInsuranceValue() < 0) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_INSURANCE_VALUE, ErrorMessages.ERR_INSURANCE_VALUE_NEGATIVE));
-            } else if (request.getInsuranceValue() > 5000000) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_INSURANCE_VALUE, ErrorMessages.ERR_INSURANCE_VALUE_MAX_EXCEEDED));
-            }
-        }
-
-        // Validate codValue (max 5,000,000)
-        if (request.getCodValue() != null) {
-            if (request.getCodValue() < 0) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_COD_VALUE, ErrorMessages.ERR_COD_VALUE_NEGATIVE));
-            } else if (request.getCodValue() > 5000000) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_COD_VALUE, ErrorMessages.ERR_COD_VALUE_MAX_EXCEEDED));
-            }
-        }
-
-        // Validate dimensions (length, width, height)
-        if (request.getLength() != null) {
-            if (request.getLength() < 0) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_LENGTH, ErrorMessages.ERR_DIMENSION_NEGATIVE));
-            } else if (request.getLength() > 200) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_LENGTH, ErrorMessages.ERR_DIMENSION_MAX_EXCEEDED));
-            }
-        }
-        if (request.getWidth() != null) {
-            if (request.getWidth() < 0) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WIDTH, ErrorMessages.ERR_DIMENSION_NEGATIVE));
-            } else if (request.getWidth() > 200) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WIDTH, ErrorMessages.ERR_DIMENSION_MAX_EXCEEDED));
-            }
-        }
-        if (request.getHeight() != null) {
-            if (request.getHeight() < 0) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_HEIGHT, ErrorMessages.ERR_DIMENSION_NEGATIVE));
-            } else if (request.getHeight() > 200) {
-                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_HEIGHT, ErrorMessages.ERR_DIMENSION_MAX_EXCEEDED));
-            }
-        }
+        validateRequiredFields(request, errors);
+        validateWeight(request, errors);
+        validateServiceType(request, errors);
+        validateMonetaryValues(request, errors);
+        validateDimensions(request, errors);
 
         return errors;
     }
 
     /**
+     * Validate required destination fields
+     */
+    private void validateRequiredFields(ShippingRequest request, List<ErrorMessageDTO> errors) {
+        if (request.getToDistrictId() == null) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_TO_DISTRICT_ID, ErrorMessages.ERR_TO_DISTRICT_REQUIRED));
+        }
+
+        if (request.getToWardCode() == null || request.getToWardCode().trim().isEmpty()) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_TO_WARD_CODE, ErrorMessages.ERR_TO_WARD_REQUIRED));
+        }
+    }
+
+    /**
+     * Validate weight field
+     */
+    private void validateWeight(ShippingRequest request, List<ErrorMessageDTO> errors) {
+        if (request.getWeight() == null) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_REQUIRED));
+        } else if (request.getWeight() <= 0) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_INVALID));
+        } else if (request.getWeight() > MAX_WEIGHT_GRAMS) {
+            errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_WEIGHT, ErrorMessages.ERR_WEIGHT_MAX_EXCEEDED));
+        }
+    }
+
+    /**
+     * Validate service type field
+     */
+    private void validateServiceType(ShippingRequest request, List<ErrorMessageDTO> errors) {
+        if (request.getServiceTypeId() != null) {
+            int serviceType = request.getServiceTypeId();
+            if (serviceType < MIN_SERVICE_TYPE || serviceType > MAX_SERVICE_TYPE) {
+                errors.add(new ErrorMessageDTO(ErrorMessages.FIELD_SERVICE_TYPE_ID, ErrorMessages.ERR_SERVICE_TYPE_INVALID));
+            }
+        }
+    }
+
+    /**
+     * Validate monetary values (insurance and COD)
+     */
+    private void validateMonetaryValues(ShippingRequest request, List<ErrorMessageDTO> errors) {
+        validateMonetaryValue(request.getInsuranceValue(), ErrorMessages.FIELD_INSURANCE_VALUE,
+                ErrorMessages.ERR_INSURANCE_VALUE_NEGATIVE, ErrorMessages.ERR_INSURANCE_VALUE_MAX_EXCEEDED,
+                MAX_INSURANCE_VALUE, errors);
+
+        validateMonetaryValue(request.getCodValue(), ErrorMessages.FIELD_COD_VALUE,
+                ErrorMessages.ERR_COD_VALUE_NEGATIVE, ErrorMessages.ERR_COD_VALUE_MAX_EXCEEDED,
+                MAX_COD_VALUE, errors);
+    }
+
+    /**
+     * Validate a single monetary value
+     */
+    private void validateMonetaryValue(Integer value, String fieldName, String negativeError,
+                                       String maxExceededError, int maxValue, List<ErrorMessageDTO> errors) {
+        if (value != null) {
+            if (value < 0) {
+                errors.add(new ErrorMessageDTO(fieldName, negativeError));
+            } else if (value > maxValue) {
+                errors.add(new ErrorMessageDTO(fieldName, maxExceededError));
+            }
+        }
+    }
+
+    /**
+     * Validate package dimensions (length, width, height)
+     */
+    private void validateDimensions(ShippingRequest request, List<ErrorMessageDTO> errors) {
+        validateDimension(request.getLength(), ErrorMessages.FIELD_LENGTH, errors);
+        validateDimension(request.getWidth(), ErrorMessages.FIELD_WIDTH, errors);
+        validateDimension(request.getHeight(), ErrorMessages.FIELD_HEIGHT, errors);
+    }
+
+    /**
+     * Validate a single dimension value
+     */
+    private void validateDimension(Integer value, String fieldName, List<ErrorMessageDTO> errors) {
+        if (value != null) {
+            if (value < 0) {
+                errors.add(new ErrorMessageDTO(fieldName, ErrorMessages.ERR_DIMENSION_NEGATIVE));
+            } else if (value > MAX_DIMENSION_CM) {
+                errors.add(new ErrorMessageDTO(fieldName, ErrorMessages.ERR_DIMENSION_MAX_EXCEEDED));
+            }
+        }
+    }
+
+    /**
      * Calculate shipping fee via GHN API
      * API: POST /shiip/public-api/v2/shipping-order/fee
+     * @param request Shipping request with destination and package info
+     * @return Shipping fee calculation result
      */
+    @SuppressWarnings("unchecked")
     public ShippingResponse calculateFee(ShippingRequest request) {
-        // Validate request first
         List<ErrorMessageDTO> errors = validateRequest(request);
         if (!errors.isEmpty()) {
             log.warn("Validation failed with {} errors", errors.size());
-            return ShippingResponse.builder()
-                    .success(false)
-                    .message(ErrorMessages.ERR_VALIDATION_FAILED)
-                    .errors(errors)
-                    .build();
+            return buildValidationErrorResponse(errors);
+        }
+
+        if (!isTokenConfigured()) {
+            log.warn("GHN Token not configured, using Mock Calculate");
+            return calculateMockFee(request);
         }
 
         try {
-            if (ghtkToken == null || ghtkToken.isEmpty()) {
-                log.warn("GHN Token not configured, using Mock Calculate");
-                return calculateMockFee(request);
-            }
-
-            String url = ghtkBaseUrl + "/shiip/public-api/v2/shipping-order/fee";
-
-            // Build request body
-            Map<String, Object> requestBody = new HashMap<>();
-            if (request.getServiceId() != null) {
-                requestBody.put("service_id", request.getServiceId());
-            }
-            if (request.getServiceTypeId() != null) {
-                requestBody.put("service_type_id", request.getServiceTypeId());
-            }
-            requestBody.put("to_district_id", request.getToDistrictId());
-            requestBody.put("to_ward_code", request.getToWardCode());
-            requestBody.put("weight", request.getWeight());
-
-            // Optional fields
-            if (request.getFromDistrictId() != null) {
-                requestBody.put("from_district_id", request.getFromDistrictId());
-            }
-            if (request.getFromWardCode() != null) {
-                requestBody.put("from_ward_code", request.getFromWardCode());
-            }
-            if (request.getLength() != null) {
-                requestBody.put("length", request.getLength());
-            }
-            if (request.getWidth() != null) {
-                requestBody.put("width", request.getWidth());
-            }
-            if (request.getHeight() != null) {
-                requestBody.put("height", request.getHeight());
-            }
-            if (request.getInsuranceValue() != null) {
-                requestBody.put("insurance_value", request.getInsuranceValue());
-            }
-            if (request.getCodValue() != null) {
-                requestBody.put("cod_value", request.getCodValue());
-            }
-            if (request.getCoupon() != null) {
-                requestBody.put("coupon", request.getCoupon());
-            }
-
-            log.info("Calling GHN API: POST {} with body: {}", url, requestBody);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, createHeaders());
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url, HttpMethod.POST, entity, Map.class);
-
-            if (response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                Integer code = parseInteger(body.get("code"));
-
-                if (code != null && code == 200) {
-                    Map<String, Object> data = (Map<String, Object>) body.get("data");
-
-                    return ShippingResponse.builder()
-                            .success(true)
-                            .message(ErrorMessages.MSG_FEE_CALCULATION_SUCCESS)
-                            .total(parseInteger(data.get("total")))
-                            .serviceFee(parseInteger(data.get("service_fee")))
-                            .insuranceFee(parseInteger(data.get("insurance_fee")))
-                            .pickStationFee(parseInteger(data.get("pick_station_fee")))
-                            .couponValue(parseInteger(data.get("coupon_value")))
-                            .r2sFee(parseInteger(data.get("r2s_fee")))
-                            .documentReturn(parseInteger(data.get("document_return")))
-                            .doubleCheck(parseInteger(data.get("double_check")))
-                            .codFee(parseInteger(data.get("cod_fee")))
-                            .pickRemoteAreasFee(parseInteger(data.get("pick_remote_areas_fee")))
-                            .deliverRemoteAreasFee(parseInteger(data.get("deliver_remote_areas_fee")))
-                            .codFailedFee(parseInteger(data.get("cod_failed_fee")))
-                            .build();
-                } else {
-                    return ShippingResponse.builder()
-                            .success(false)
-                            .message((String) body.get("message"))
-                            .build();
-                }
-            }
+            return callGhnFeeApi(request);
         } catch (Exception e) {
             log.error("Error calling GHN API to calculate fee: {}", e.getMessage());
         }
 
         return calculateMockFee(request);
+    }
+
+    /**
+     * Build validation error response
+     */
+    private ShippingResponse buildValidationErrorResponse(List<ErrorMessageDTO> errors) {
+        return ShippingResponse.builder()
+                .success(false)
+                .message(ErrorMessages.ERR_VALIDATION_FAILED)
+                .errors(errors)
+                .build();
+    }
+
+    /**
+     * Call GHN API to calculate shipping fee
+     */
+    @SuppressWarnings("unchecked")
+    private ShippingResponse callGhnFeeApi(ShippingRequest request) {
+        String url = ghtkBaseUrl + "/shiip/public-api/v2/shipping-order/fee";
+        Map<String, Object> requestBody = buildFeeRequestBody(request);
+
+        log.info("Calling GHN API: POST {} with body: {}", url, requestBody);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, createHeaders());
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity, (Class<Map<String, Object>>) (Class<?>) Map.class);
+
+        if (response.getBody() != null) {
+            Map<String, Object> body = response.getBody();
+            Integer code = parseInteger(body.get("code"));
+
+            if (code != null && code == API_SUCCESS_CODE) {
+                Map<String, Object> data = (Map<String, Object>) body.get("data");
+                return buildSuccessResponse(data);
+            } else {
+                return ShippingResponse.builder()
+                        .success(false)
+                        .message((String) body.get("message"))
+                        .build();
+            }
+        }
+
+        return calculateMockFee(request);
+    }
+
+    /**
+     * Build request body for GHN fee API
+     */
+    private Map<String, Object> buildFeeRequestBody(ShippingRequest request) {
+        Map<String, Object> requestBody = new HashMap<>();
+
+        // Required fields
+        requestBody.put("to_district_id", request.getToDistrictId());
+        requestBody.put("to_ward_code", request.getToWardCode());
+        requestBody.put("weight", request.getWeight());
+
+        // Optional service fields
+        addIfNotNull(requestBody, "service_id", request.getServiceId());
+        addIfNotNull(requestBody, "service_type_id", request.getServiceTypeId());
+
+        // Optional origin fields
+        addIfNotNull(requestBody, "from_district_id", request.getFromDistrictId());
+        addIfNotNull(requestBody, "from_ward_code", request.getFromWardCode());
+
+        // Optional dimension fields
+        addIfNotNull(requestBody, "length", request.getLength());
+        addIfNotNull(requestBody, "width", request.getWidth());
+        addIfNotNull(requestBody, "height", request.getHeight());
+
+        // Optional value fields
+        addIfNotNull(requestBody, "insurance_value", request.getInsuranceValue());
+        addIfNotNull(requestBody, "cod_value", request.getCodValue());
+        addIfNotNull(requestBody, "coupon", request.getCoupon());
+
+        return requestBody;
+    }
+
+    /**
+     * Add value to map if not null
+     */
+    private void addIfNotNull(Map<String, Object> map, String key, Object value) {
+        if (value != null) {
+            map.put(key, value);
+        }
+    }
+
+    /**
+     * Build success response from API data
+     */
+    private ShippingResponse buildSuccessResponse(Map<String, Object> data) {
+        return ShippingResponse.builder()
+                .success(true)
+                .message(ErrorMessages.MSG_FEE_CALCULATION_SUCCESS)
+                .total(parseInteger(data.get("total")))
+                .serviceFee(parseInteger(data.get("service_fee")))
+                .insuranceFee(parseInteger(data.get("insurance_fee")))
+                .pickStationFee(parseInteger(data.get("pick_station_fee")))
+                .couponValue(parseInteger(data.get("coupon_value")))
+                .r2sFee(parseInteger(data.get("r2s_fee")))
+                .documentReturn(parseInteger(data.get("document_return")))
+                .doubleCheck(parseInteger(data.get("double_check")))
+                .codFee(parseInteger(data.get("cod_fee")))
+                .pickRemoteAreasFee(parseInteger(data.get("pick_remote_areas_fee")))
+                .deliverRemoteAreasFee(parseInteger(data.get("deliver_remote_areas_fee")))
+                .codFailedFee(parseInteger(data.get("cod_failed_fee")))
+                .build();
     }
 
     /**
@@ -480,29 +594,12 @@ public class GhtkService {
      * Mock shipping fee calculation when Token is not configured
      */
     private ShippingResponse calculateMockFee(ShippingRequest request) {
-        // Calculate mock fee based on weight
-        int baseFee = 15000;
-        int weightFee = (request.getWeight() / 500) * 5000;
+        int weightFee = (request.getWeight() / MOCK_WEIGHT_UNIT_GRAMS) * MOCK_WEIGHT_FEE_PER_UNIT;
+        int distanceFee = isSameDistrict(request) ? 0 : MOCK_DISTANCE_FEE;
+        int serviceFee = MOCK_BASE_FEE + weightFee + distanceFee;
 
-        // Calculate distance based on district ID
-        boolean sameDistrict = request.getFromDistrictId() != null
-                && request.getFromDistrictId().equals(request.getToDistrictId());
-        int distanceFee = sameDistrict ? 0 : 20000;
-
-        int serviceFee = baseFee + weightFee + distanceFee;
-
-        // Insurance fee = 0.5% of goods value
-        int insuranceFee = 0;
-        if (request.getInsuranceValue() != null && request.getInsuranceValue() > 0) {
-            insuranceFee = (int) (request.getInsuranceValue() * 0.005);
-        }
-
-        // COD fee = 1% of COD value
-        int codFee = 0;
-        if (request.getCodValue() != null && request.getCodValue() > 0) {
-            codFee = (int) (request.getCodValue() * 0.01);
-        }
-
+        int insuranceFee = calculateMockInsuranceFee(request.getInsuranceValue());
+        int codFee = calculateMockCodFee(request.getCodValue());
         int total = serviceFee + insuranceFee + codFee;
 
         return ShippingResponse.builder()
@@ -521,6 +618,34 @@ public class GhtkService {
                 .deliverRemoteAreasFee(0)
                 .codFailedFee(0)
                 .build();
+    }
+
+    /**
+     * Check if origin and destination are in the same district
+     */
+    private boolean isSameDistrict(ShippingRequest request) {
+        return request.getFromDistrictId() != null
+                && request.getFromDistrictId().equals(request.getToDistrictId());
+    }
+
+    /**
+     * Calculate mock insurance fee (0.5% of goods value)
+     */
+    private int calculateMockInsuranceFee(Integer insuranceValue) {
+        if (insuranceValue != null && insuranceValue > 0) {
+            return (int) (insuranceValue * MOCK_INSURANCE_RATE);
+        }
+        return 0;
+    }
+
+    /**
+     * Calculate mock COD fee (1% of COD value)
+     */
+    private int calculateMockCodFee(Integer codValue) {
+        if (codValue != null && codValue > 0) {
+            return (int) (codValue * MOCK_COD_RATE);
+        }
+        return 0;
     }
 
     /**
